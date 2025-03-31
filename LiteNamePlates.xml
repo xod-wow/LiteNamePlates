@@ -1,0 +1,12 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+
+  <Script file="LiteNamePlates.lua"/>
+
+  <Frame name="LiteNamePlates" toplevel="true" mixin="LiteNamePlatesMixin">
+    <Scripts>
+      <OnEvent method="OnEvent" />
+      <OnLoad method="OnLoad" />
+    </Scripts>
+  </Frame>
+
+</Ui>
