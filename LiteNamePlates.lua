@@ -4,16 +4,39 @@
     Copyright 2023 Mike "Xodiv" Battersby
 
 ----------------------------------------------------------------------------]]--
+
 local addonName, addonTable = ...
 
+local IsInGroup = IsInGroup
 local UnitIsFriend = UnitIsFriend
 local UnitHasMana = UnitHasMana
-
-LiteNamePlatesMixin = {}
+local UnitIsBossMob = UnitIsBossMob
+local ValueToBoolean = ValueToBoolean
 
 local Defaults = {
-    castersWithoutMana = { }
+    global = {
+        canInterrupt = { },
+        rules = {
+            {
+                check = "lostthreat",
+                color = { 1, 1, 0, 0.6 },
+                colorHealthBar = true,
+                colorName = false,
+                enabled = true,
+            },
+            {
+                check = "interrupt",
+                colorHealthBar = true,
+                colorName = true,
+                color = { 1, 0, 1, 1 },
+                enabled = true,
+            },
+        }
+    }
 }
+
+
+--[[------------------------------------------------------------------------]]--
 
 local function IsHostileWithPlayer(unit)
     if UnitReaction(unit, 'player') == 2 then
@@ -29,40 +52,72 @@ local function UnitNPCID(unit)
     return tonumber(npcID)
 end
 
-local Conditions = {
-    {
-        r = 0, g = 1, b = 1, a = 1,
-        check =
-            function (self, unit)
-                if UnitHasMana(unit) then
-                    return true
-                else
-                    local npcID = UnitNPCID(unit)
-                    return self.db.castersWithoutMana[npcID] or false
-                end
-            end,
-    },
+local function IsPlayerEffectivelyTank()
+    local assignedRole = UnitGroupRolesAssigned("player")
+    if assignedRole == "NONE" then
+        local spec = GetSpecialization()
+        return spec and GetSpecializationRole(spec) == "TANK"
+    end
+    return assignedRole == "TANK"
+end
+
+
+--[[------------------------------------------------------------------------]]--
+
+local Checks = {
+    ["interrupt"] = 
+        function (self, unit)
+            if UnitIsBossMob(unit) then
+                return false
+            elseif UnitHasMana(unit) then
+                return true
+            else
+                local npcID = UnitNPCID(unit)
+                return ValueToBoolean(self.db.global.canInterrupt[npcID])
+            end
+        end,
+    ["lostthreat"] =
+        function (self, unit)
+            if IsPlayerEffectivelyTank() and IsInGroup() then
+                local isTanking, threatStatus = UnitDetailedThreatSituation("player", unit)
+                return not isTanking and threatStatus ~= nil
+            end
+        end,
+    ["npcid"] =
+        function (self, unit, id)
+            local npcID = UnitNPCID(unit)
+            return npcID == id
+        end,
 }
 
+
+--[[------------------------------------------------------------------------]]--
+
+LiteNamePlatesMixin = {}
 
 function LiteNamePlatesMixin:OnLoad()
     self:RegisterEvent("ADDON_LOADED")
 end
 
 function LiteNamePlatesMixin:Initialize()
-    LiteNameplatesDB = LiteNamePlatesDB or CopyTable(Defaults)
-    self.db = LiteNamePlatesDB
+    self.db = LibStub("AceDB-3.0"):New("LiteNamePlatesDB", Defaults, true)
 
     hooksecurefunc('CompactUnitFrame_UpdateHealthColor',
         function (unitFrame)
             if self:ShouldColorUnit(unitFrame.unit) then
-                self:UpdateUnitFrameBarColor(unitFrame)
+                self:UpdateUnitFrameColor(unitFrame)
             end
         end)
     hooksecurefunc('CompactUnitFrame_UpdateName',
         function (unitFrame)
             if self:ShouldColorUnit(unitFrame.unit) then
-                self:UpdateUnitFrameTextColor(unitFrame)
+                self:UpdateUnitFrameColor(unitFrame)
+            end
+        end)
+    hooksecurefunc('CompactUnitFrame_UpdateHealthBorder',
+        function (unitFrame)
+            if self:ShouldColorUnit(unitFrame.unit) then
+                self:UpdateUnitFrameColor(unitFrame)
             end
         end)
 
@@ -84,28 +139,27 @@ function LiteNamePlatesMixin:ShouldColorUnit(unit)
     end
 end
 
-function LiteNamePlatesMixin:UpdateUnitFrameBarColor(unitFrame)
-    for _, cond in ipairs(Conditions) do
-        if cond.check(self, unitFrame.unit) then
-            unitFrame.healthBar:SetStatusBarColor(cond.r, cond.g, cond.b, cond.a or 1)
-            return
+function LiteNamePlatesMixin:UpdateUnitFrameColor(unitFrame)
+    for _, rule in ipairs(self.db.global.rules) do
+        if rule.enabled then
+            local handler = Checks[rule.check]
+            if handler and handler(self, unitFrame.unit) then
+                if rule.colorHealthBar then
+                    unitFrame.healthBar:SetStatusBarColor(unpack(rule.color))
+                end
+                if rule.colorName then
+                    unitFrame.name:SetTextColor(unpack(rule.color))
+                end
+                return
+            end
         end
     end
 end
 
-function LiteNamePlatesMixin:UpdateUnitFrameTextColor(unitFrame)
-    for _, cond in ipairs(Conditions) do
-        if cond.check(self, unitFrame.unit) then
-            unitFrame.name:SetTextColor(cond.r, cond.g, cond.b, cond.a or 1)
-            return
-        end
-    end
-end
-
-function LiteNamePlatesMixin:SaveAsCaster(unit)
-    if not UnitHasMana(unit) and not UnitIsPlayer(unit) then
+function LiteNamePlatesMixin:SaveUnitAsInterrupt(unit)
+    if not UnitHasMana(unit) and not UnitIsPlayer(unit) and not UnitIsBossMob(unit) then
         local npcID = UnitNPCID(unit)
-        self.db.castersWithoutMana[npcID] = true
+        self.db.global.canInterrupt[npcID] = true
     end
 end
 
@@ -128,17 +182,17 @@ function LiteNamePlatesMixin:OnEvent(event, ...)
         local unit = ...
         local notInterruptible = select(8, UnitCastingInfo(unit))
         if notInterruptible == false then
-            self:SaveAsCaster(unit)
+            self:SaveUnitAsInterrupt(unit)
         end
     elseif event == "UNIT_SPELLCAST_CHANNEL_START" then
         local unit = ...
         local notInterruptible = select(7, UnitChannelInfo(unit))
         if notInterruptible == false then
-            self:SaveAsCaster(unit)
+            self:SaveUnitAsInterrupt(unit)
         end
     elseif event == "UNIT_SPELLCAST_INTERRUPTIBLE" then
         local unit = ...
-        self:SaveAsCaster(unit)
+        self:SaveUnitAsInterrupt(unit)
     end
 end
 
