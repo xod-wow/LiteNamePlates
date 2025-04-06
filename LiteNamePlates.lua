@@ -143,6 +143,10 @@ function LiteNamePlatesMixin:Initialize()
 
     self:RegisterEvent("PLAYER_REGEN_DISABLED")
     self:RegisterEvent("PLAYER_REGEN_ENABLED")
+
+    SlashCmdList["LiteNamePlates"] = self.OpenOptions
+    _G.SLASH_LiteNamePlates1 = "/litenameplates"
+    _G.SLASH_LiteNamePlates2 = "/lnp"
 end
 
 function LiteNamePlatesMixin:ShouldColorUnit(unit)
@@ -195,7 +199,7 @@ function LiteNamePlatesMixin:SaveUnitAsInterrupt(unit)
     and not UnitIsFriend(unit, 'player')
     and not UnitIsBossMob(unit) then
         local npcID = UnitNPCID(unit)
-        self.db.global.groups.interrupt[npcID] = name
+        self.db.global.groups.interrupt[npcID] = UnitName(unit)
     end
 end
 
