@@ -6,3 +6,5 @@
 ## SavedVariables: LiteNamePlatesDB
 
 LiteNamePlates.xml
+
+UI/Options.lua

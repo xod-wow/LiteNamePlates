@@ -15,22 +15,31 @@ local ValueToBoolean = ValueToBoolean
 
 local Defaults = {
     global = {
-        canInterrupt = { },
         rules = {
             {
-                check = "lostthreat",
+                checks = { "lostthreat" },
                 color = { 1, 1, 0, 0.6 },
-                colorHealthBar = true,
-                colorName = false,
+                colorHealthBar = false,
+                colorName = true,
                 enabled = true,
             },
             {
-                check = "interrupt",
+                checks = { "interrupt" },
                 colorHealthBar = true,
                 colorName = true,
                 color = { 1, 0, 1, 1 },
                 enabled = true,
             },
+            {
+                checks = { "hasmana" },
+                colorHealthBar = true,
+                colorName = true,
+                color = { 1, 0.5, 1, 1 },
+                enabled = true,
+            },
+        },
+        groups = {
+            interrupt = {}
         }
     }
 }
@@ -65,22 +74,27 @@ end
 --[[------------------------------------------------------------------------]]--
 
 local Checks = {
+    ["hasmana"] = 
+        function (self, unit)
+            return UnitHasMana(unit)
+        end,
     ["interrupt"] = 
         function (self, unit)
-            if UnitIsBossMob(unit) then
-                return false
-            elseif UnitHasMana(unit) then
-                return true
-            else
-                local npcID = UnitNPCID(unit)
-                return ValueToBoolean(self.db.global.canInterrupt[npcID])
-            end
+            local npcID = UnitNPCID(unit)
+            return self.db.global.groups.interrupt[npcID] ~= nil
         end,
     ["lostthreat"] =
         function (self, unit)
             if IsPlayerEffectivelyTank() and IsInGroup() then
                 local isTanking, threatStatus = UnitDetailedThreatSituation("player", unit)
                 return not isTanking and threatStatus ~= nil
+            end
+        end,
+    ["npcgroup"] =
+        function (self, unit, group)
+            if self.groups[group] then
+                local npcID = UnitNPCID(unit)
+                return self.groups[group][npcID] ~= nil
             end
         end,
     ["npcid"] =
@@ -130,6 +144,8 @@ function LiteNamePlatesMixin:ShouldColorUnit(unit)
         return false
     elseif UnitIsPlayer(unit) then
         return false
+    elseif UnitIsBossMob(unit) then
+        return false
     elseif unit:sub(1,9) ~= 'nameplate' then
         return false
     elseif not IsHostileWithPlayer(unit) then
@@ -139,27 +155,37 @@ function LiteNamePlatesMixin:ShouldColorUnit(unit)
     end
 end
 
+function LiteNamePlatesMixin:CheckRule(rule, unit)
+    if not rule.enabled then
+        return false
+    end
+    for _, check in ipairs(rule.checks) do
+        local handler = Checks[check]
+        if not handler or not handler(self, unit) then
+            return false
+        end
+    end
+    return true
+end
+
 function LiteNamePlatesMixin:UpdateUnitFrameColor(unitFrame)
     for _, rule in ipairs(self.db.global.rules) do
-        if rule.enabled then
-            local handler = Checks[rule.check]
-            if handler and handler(self, unitFrame.unit) then
-                if rule.colorHealthBar then
-                    unitFrame.healthBar:SetStatusBarColor(unpack(rule.color))
-                end
-                if rule.colorName then
-                    unitFrame.name:SetTextColor(unpack(rule.color))
-                end
-                return
+        if self:CheckRule(rule, unitFrame.unit) then
+            if rule.colorHealthBar then
+                unitFrame.healthBar:SetStatusBarColor(unpack(rule.color))
             end
+            if rule.colorName then
+                unitFrame.name:SetTextColor(unpack(rule.color))
+            end
+            return
         end
     end
 end
 
 function LiteNamePlatesMixin:SaveUnitAsInterrupt(unit)
-    if not UnitHasMana(unit) and not UnitIsPlayer(unit) and not UnitIsBossMob(unit) then
+    if not UnitIsPlayer(unit) and not UnitIsBossMob(unit) then
         local npcID = UnitNPCID(unit)
-        self.db.global.canInterrupt[npcID] = true
+        self.db.global.groups.interrupt[npcID] = UnitName(unit)
     end
 end
 
