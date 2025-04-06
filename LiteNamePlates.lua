@@ -98,9 +98,9 @@ local Checks = {
         end,
     ["group"] =
         function (self, unit, group)
-            if self.groups[group] then
+            if self.db.global.groups[group] then
                 local npcID = UnitNPCID(unit)
-                return self.groups[group][npcID] ~= nil
+                return self.db.global.groups[group][npcID] ~= nil
             end
         end,
     ["id"] =
