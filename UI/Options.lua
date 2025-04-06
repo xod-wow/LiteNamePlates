@@ -124,13 +124,21 @@ local function GenerateOptions()
                         order = i*10+2,
                         type = "description",
                         name = tostring(id),
-                        width = 0.5,
+                        width = 0.4,
                     },
                     ["npcname"..i] = {
                         order = i*10+3,
                         type = "description",
                         name = db.global.groups[name][id],
-                        width = 1,
+                        width = 1.5,
+                    },
+                    ["npcdelete"..i] = {
+                        order = i*10+4,
+                        type = "execute",
+                        name = DELETE,
+                        desc = db.global.groups[name][id],
+                        func = function () db.global.groups[name][id] = nil end,
+                        width = 0.5,
                     },
                 }
             }

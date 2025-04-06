@@ -11,7 +11,6 @@ local IsInGroup = IsInGroup
 local UnitIsFriend = UnitIsFriend
 local UnitHasMana = UnitHasMana
 local UnitIsBossMob = UnitIsBossMob
-local ValueToBoolean = ValueToBoolean
 
 local Defaults = {
     global = {
@@ -28,6 +27,13 @@ local Defaults = {
                 colorHealthBar = true,
                 colorName = true,
                 color = { 1, 0, 1, 1 },
+                enabled = true,
+            },
+            {
+                checks = { "group:frontal" },
+                colorHealthBar = true,
+                colorName = true,
+                color = { 0, 1, 1, 1 },
                 enabled = true,
             },
             {
@@ -90,14 +96,14 @@ local Checks = {
                 return not isTanking and threatStatus ~= nil
             end
         end,
-    ["npcgroup"] =
+    ["group"] =
         function (self, unit, group)
             if self.groups[group] then
                 local npcID = UnitNPCID(unit)
                 return self.groups[group][npcID] ~= nil
             end
         end,
-    ["npcid"] =
+    ["id"] =
         function (self, unit, id)
             local npcID = UnitNPCID(unit)
             return npcID == id
@@ -160,8 +166,9 @@ function LiteNamePlatesMixin:CheckRule(rule, unit)
         return false
     end
     for _, check in ipairs(rule.checks) do
+        local check, arg = string.split(':', check, 2)
         local handler = Checks[check]
-        if not handler or not handler(self, unit) then
+        if not handler or not handler(self, unit, arg) then
             return false
         end
     end
@@ -183,9 +190,12 @@ function LiteNamePlatesMixin:UpdateUnitFrameColor(unitFrame)
 end
 
 function LiteNamePlatesMixin:SaveUnitAsInterrupt(unit)
-    if not UnitIsPlayer(unit) and not UnitIsBossMob(unit) then
+    if not UnitIsPlayer(unit)
+    and not UnitIsOtherPlayersPet(unit)
+    and not UnitIsFriend(unit, 'player')
+    and not UnitIsBossMob(unit) then
         local npcID = UnitNPCID(unit)
-        self.db.global.groups.interrupt[npcID] = UnitName(unit)
+        self.db.global.groups.interrupt[npcID] = name
     end
 end
 
