@@ -45,6 +45,25 @@ local options = {
     },
 }
 
+local addState = { }
+
+function addState.Set(info, v)
+    local k = table.concat(info, '.')
+    addState[k] = v
+end
+
+function addState.Get(info)
+    local k = table.concat(info, '.')
+    return addState[k]
+end
+
+function addState.GetAndRemove(info)
+    local k = table.concat(info, '.')
+    local v = addState[k]
+    addState[k] = nil
+    return v
+end
+
 local function GenerateOptions()
     local db = LiteNamePlates.db
 
@@ -83,7 +102,7 @@ local function GenerateOptions()
                     type = "toggle",
                     name = "Bar",
                     get = function() return rule.colorHealthBar end,
-                    set = function(_, v) end,
+                    set = function(_, v) rule.colorHealthBar = ValueToBoolean(v) end,
                     width = 0.67,
                 },
                 ["colorName"..i] = {
@@ -91,7 +110,7 @@ local function GenerateOptions()
                     type = "toggle",
                     name = "Name",
                     get = function() return rule.colorName end,
-                    set = function(_, v) end,
+                    set = function(_, v) rule.colorName = ValueToBoolean(v) end,
                     width = 0.67,
                 }
             }
@@ -103,17 +122,59 @@ local function GenerateOptions()
     local groupsTable = {}
     local groupNames = GetKeysArray(db.global.groups)
     table.sort(groupNames)
-    for i, name in ipairs(groupNames) do
-        groupsTable[name] = {
+    for _, groupName in ipairs(groupNames) do
+        groupsTable[groupName] = {
             type = "group",
-            name = name,
+            name = groupName,
             order = order(),
-            args = {},
+            args = {
+                ["groupAdd"] = {
+                    type = "group",
+                    inline = true,
+                    name = "",
+                    width = 'full',
+                    order = 1,
+                    args = {
+                        ["npcid"] = {
+                            order = 2,
+                            type = "input",
+                            name = "",
+                            pattern = "^%d+$",
+                            width = 0.4,
+                            get = addState.Get,
+                            set = addState.Set,
+                        },
+                        ["npcname"] = {
+                            order = 3,
+                            type = "input",
+                            name = "",
+                            width = 1.5,
+                            get = addState.Get,
+                            set = addState.Set,
+                        },
+                        ["npcadd"] = {
+                            order = 4,
+                            type = "execute",
+                            name = ADD,
+                            func =
+                                function (info, ...)
+                                    info[#info] = 'npcid'
+                                    local npcID = tonumber(addState.GetAndRemove(info))
+                                    info[#info] = 'npcname'
+                                    local npcName = addState.GetAndRemove(info)
+                                    db.global.groups[groupName][npcID] = npcName
+                                end,
+                            width = 0.5,
+                        },
+                    },
+                },
+            },
         }
-        local npcIDs = GetKeysArraySortedByValue(db.global.groups[name])
+
+        local npcIDs = GetKeysArraySortedByValue(db.global.groups[groupName])
         for i, id in ipairs(npcIDs) do
             -- fake groups force lines in list
-            groupsTable[name].args["group"..i] = {
+            groupsTable[groupName].args["group"..i] = {
                 type = "group",
                 inline = true,
                 name = "",
@@ -129,15 +190,15 @@ local function GenerateOptions()
                     ["npcname"..i] = {
                         order = i*10+3,
                         type = "description",
-                        name = db.global.groups[name][id],
+                        name = db.global.groups[groupName][id],
                         width = 1.5,
                     },
                     ["npcdelete"..i] = {
                         order = i*10+4,
                         type = "execute",
                         name = DELETE,
-                        desc = db.global.groups[name][id],
-                        func = function () db.global.groups[name][id] = nil end,
+                        desc = db.global.groups[groupName][id],
+                        func = function () db.global.groups[groupName][id] = nil end,
                         width = 0.5,
                     },
                 }
