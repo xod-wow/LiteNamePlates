@@ -177,14 +177,19 @@ function LiteNamePlatesMixin:CheckRule(rule, unit)
 end
 
 function LiteNamePlatesMixin:UpdateUnitFrameColor(unitFrame)
+    local todo = { name = true, healthBar = true }
     for _, rule in ipairs(self.db.global.rules) do
         if self:CheckRule(rule, unitFrame.unit) then
-            if rule.colorHealthBar then
+            if todo.healthBar and rule.colorHealthBar then
                 unitFrame.healthBar:SetStatusBarColor(unpack(rule.color))
+                todo.healthBar = nil
             end
-            if rule.colorName then
+            if todo.name and rule.colorName then
                 unitFrame.name:SetTextColor(unpack(rule.color))
+                todo.name = nil
             end
+        end
+        if next(todo) == nil then
             return
         end
     end
