@@ -122,24 +122,15 @@ end
 function LiteNamePlatesMixin:Initialize()
     self.db = LibStub("AceDB-3.0"):New("LiteNamePlatesDB", Defaults, true)
 
-    hooksecurefunc('CompactUnitFrame_UpdateHealthColor',
-        function (unitFrame)
-            if self:ShouldColorUnit(unitFrame.unit) then
-                self:UpdateUnitFrameColor(unitFrame)
-            end
-        end)
-    hooksecurefunc('CompactUnitFrame_UpdateName',
-        function (unitFrame)
-            if self:ShouldColorUnit(unitFrame.unit) then
-                self:UpdateUnitFrameColor(unitFrame)
-            end
-        end)
-    hooksecurefunc('CompactUnitFrame_UpdateHealthBorder',
-        function (unitFrame)
-            if self:ShouldColorUnit(unitFrame.unit) then
-                self:UpdateUnitFrameColor(unitFrame)
-            end
-        end)
+    local function UpdateHook(unitFrame)
+        if self:ShouldColorUnit(unitFrame.unit) then
+            self:UpdateUnitFrameColor(unitFrame)
+        end
+    end
+
+    hooksecurefunc('CompactUnitFrame_UpdateName', UpdateHook)
+    hooksecurefunc('CompactUnitFrame_UpdateHealthColor', UpdateHook)
+    hooksecurefunc('CompactUnitFrame_UpdateHealthBorder', UpdateHook)
 
     self:RegisterEvent("PLAYER_REGEN_DISABLED")
     self:RegisterEvent("PLAYER_REGEN_ENABLED")
@@ -150,7 +141,13 @@ function LiteNamePlatesMixin:Initialize()
 end
 
 function LiteNamePlatesMixin:ShouldColorUnit(unit)
-    if not unit then
+    -- Forbidden nameplates don't work, but will still have their unitframes
+    -- passed to the hook. Because you can't call any functions on them you
+    -- can't tie them back to their nameplate to tell it's forbidden. I
+    -- think this check works.
+    if C_NamePlate.GetNamePlateForUnit(unit) == nil then
+        return false
+    elseif not unit then
         return false
     elseif UnitIsPlayer(unit) then
         return false
