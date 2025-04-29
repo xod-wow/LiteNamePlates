@@ -23,17 +23,17 @@ local Defaults = {
                 enabled = true,
             },
             {
-                checks = { "interrupt" },
-                colorHealthBar = true,
-                colorName = true,
-                color = { 1, 0, 1, 1 },
-                enabled = true,
-            },
-            {
                 checks = { "group:frontal" },
                 colorHealthBar = true,
                 colorName = true,
                 color = { 0, 1, 1, 1 },
+                enabled = true,
+            },
+            {
+                checks = { "interrupt" },
+                colorHealthBar = true,
+                colorName = true,
+                color = { 1, 0, 1, 1 },
                 enabled = true,
             },
             {
@@ -80,11 +80,11 @@ end
 --[[------------------------------------------------------------------------]]--
 
 local Checks = {
-    ["hasmana"] = 
+    ["hasmana"] =
         function (self, unit)
             return UnitHasMana(unit)
         end,
-    ["interrupt"] = 
+    ["interrupt"] =
         function (self, unit)
             local npcID = UnitNPCID(unit)
             return self.db.global.groups.interrupt[npcID] ~= nil
@@ -135,7 +135,11 @@ function LiteNamePlatesMixin:Initialize()
     self:RegisterEvent("PLAYER_REGEN_DISABLED")
     self:RegisterEvent("PLAYER_REGEN_ENABLED")
 
-    SlashCmdList["LiteNamePlates"] = self.OpenOptions
+    SlashCmdList["LiteNamePlates"] =
+        function ()
+            LibStub("AceConfigDialog-3.0"):Open(addonName)
+            return true
+        end
     _G.SLASH_LiteNamePlates1 = "/litenameplates"
     _G.SLASH_LiteNamePlates2 = "/lnp"
 end
@@ -149,11 +153,13 @@ function LiteNamePlatesMixin:ShouldColorUnit(unit)
         return false
     elseif not unit then
         return false
+    elseif unit:sub(1,9) ~= 'nameplate' then
+        return false
     elseif UnitIsPlayer(unit) then
         return false
     elseif UnitIsBossMob(unit) then
         return false
-    elseif unit:sub(1,9) ~= 'nameplate' then
+    elseif UnitIsTapDenied(unit) then
         return false
     elseif not IsHostileWithPlayer(unit) then
         return false
@@ -181,6 +187,20 @@ function LiteNamePlatesMixin:UpdateUnitFrameColor(unitFrame)
     for _, rule in ipairs(self.db.global.rules) do
         if self:CheckRule(rule, unitFrame.unit) then
             if todo.healthBar and rule.colorHealthBar then
+                --[[
+                local ok, err = pcall(unitFrame.healthBar.SetStatusBarColor, unitFrame.healthBar, unpack(rule.color))
+                if not ok then
+                    error(err)
+                    self.db.global.errors = self.db.global.errors or {}
+                    table.insert(self.db.global.errors,
+                        {
+                            err = err,
+                            unit = unitFrame.unit,
+                            guid = UnitGUID(unitFrame.unit),
+                            rule = CopyTable(rule)
+                        })
+                end
+                ]]
                 unitFrame.healthBar:SetStatusBarColor(unpack(rule.color))
                 todo.healthBar = nil
             end
