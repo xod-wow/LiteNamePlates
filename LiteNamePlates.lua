@@ -10,7 +10,16 @@ local addonName, addonTable = ...
 local IsInGroup = IsInGroup
 local UnitIsFriend = UnitIsFriend
 local UnitHasMana = UnitHasMana
-local UnitIsBossMob = UnitIsBossMob
+local UnitIsBossMob = UnitIsBossMob or function () return false end
+local GetSpecialization = GetSpecialization
+
+if not UnitIsBossMob then
+    UnitIsBossMob = function () return false end
+end
+
+if not GetSpecialization then
+    GetSpecialization = function () return C_SpecializationInfo.GetActiveSpecGroup() end
+end
 
 local Defaults = {
     global = {
