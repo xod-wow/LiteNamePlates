@@ -7,17 +7,31 @@
 
 local addonName, addonTable = ...
 
-local IsInGroup = IsInGroup
-local UnitIsFriend = UnitIsFriend
-local UnitHasMana = UnitHasMana
-local UnitIsBossMob = UnitIsBossMob or function () return false end
+local C_NamePlate = C_NamePlate
 local GetSpecialization = GetSpecialization
+local GetSpecializationRole = GetSpecializationRole
+local IsInGroup = IsInGroup
+local UnitDetailedThreatSituation = UnitDetailedThreatSituation
+local UnitGroupRolesAssigned = UnitGroupRolesAssigned
+local UnitHasMana = UnitHasMana
+local UnitIsBossMob = UnitIsBossMob
+local UnitIsFriend = UnitIsFriend
+local UnitIsOtherPlayersPet = UnitIsOtherPlayersPet
+local UnitIsPlayer = UnitIsPlayer
+local UnitIsTapDenied = UnitIsTapDenied
+local UnitReaction = UnitReaction
+local UnitName = UnitName
+local UnitCastingInfo = UnitCastingInfo
+local UnitChannelInfo = UnitChannelInfo
+
+local strsplit = strsplit
 
 if not UnitIsBossMob then
     UnitIsBossMob = function () return false end
 end
 
 if not GetSpecialization then
+    local C_SpecializationInfo = C_SpecializationInfo
     GetSpecialization = function () return C_SpecializationInfo.GetActiveSpecGroup() end
 end
 
@@ -181,8 +195,8 @@ function LiteNamePlatesMixin:CheckRule(rule, unit)
     if not rule.enabled then
         return false
     end
-    for _, check in ipairs(rule.checks) do
-        local check, arg = string.split(':', check, 2)
+    for _, checkAndArg in ipairs(rule.checks) do
+        local check, arg = strsplit(':', checkAndArg, 2)
         local handler = Checks[check]
         if not handler or not handler(self, unit, arg) then
             return false

@@ -157,7 +157,7 @@ local function GenerateOptions()
                             type = "execute",
                             name = ADD,
                             func =
-                                function (info, ...)
+                                function (info)
                                     info[#info] = 'npcid'
                                     local npcID = tonumber(addState.GetAndRemove(info))
                                     info[#info] = 'npcname'
@@ -213,7 +213,6 @@ end
 
 local AceConfig = LibStub("AceConfig-3.0")
 local AceConfigDialog = LibStub("AceConfigDialog-3.0")
-local AceDBOptions =  LibStub("AceDBOptions-3.0")
 
 -- AddOns are listed in the Blizzard panel in the order they are
 -- added, not sorted by name. In order to mostly get them to
