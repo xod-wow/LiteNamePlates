@@ -145,8 +145,10 @@ end
 function LiteNamePlatesMixin:Initialize()
     self.db = LibStub("AceDB-3.0"):New("LiteNamePlatesDB", Defaults, true)
 
+    self.targetTexts = {}
+
     local function UpdateHook(unitFrame)
-        if self:ShouldColorUnit(unitFrame.unit) then
+        if self:ShouldHandleUnit(unitFrame.unit) then
             self:UpdateUnitFrameColor(unitFrame)
         end
     end
@@ -167,7 +169,7 @@ function LiteNamePlatesMixin:Initialize()
     _G.SLASH_LiteNamePlates2 = "/lnp"
 end
 
-function LiteNamePlatesMixin:ShouldColorUnit(unit)
+function LiteNamePlatesMixin:ShouldHandleUnit(unit, includeBoss)
     -- Forbidden nameplates don't work, but will still have their unitframes
     -- passed to the hook. Because you can't call any functions on them you
     -- can't tie them back to their nameplate to tell it's forbidden. I
@@ -180,7 +182,7 @@ function LiteNamePlatesMixin:ShouldColorUnit(unit)
         return false
     elseif UnitIsPlayer(unit) then
         return false
-    elseif UnitIsBossMob(unit) then
+    elseif not includeBoss and UnitIsBossMob(unit) then
         return false
     elseif UnitIsTapDenied(unit) then
         return false
@@ -248,6 +250,33 @@ function LiteNamePlatesMixin:SaveUnitAsInterrupt(unit)
     end
 end
 
+function LiteNamePlatesMixin:GetTargetText(unit)
+    if not self.targetTexts[unit] then
+        local nameplate = C_NamePlate.GetNamePlateForUnit(unit)
+        local castBar = nameplate.UnitFrame.castBar
+        local text = self:CreateFontString()
+        local fontFile, height, flags = castBar.Text:GetFont()
+        text:SetFont(fontFile, height, flags)
+        text:SetPoint("LEFT", castBar, "RIGHT", 4)
+        text:Hide()
+        self.targetTexts[unit] = text
+    end
+    return self.targetTexts[unit]
+end
+
+function LiteNamePlatesMixin:UpdateCastingTarget(unit, isCasting)
+    if self:ShouldHandleUnit(unit, true) then
+        local text = self:GetTargetText(unit)
+        if isCasting then
+            local targetName = UnitName(unit..'-target')
+            text:SetText(targetName)
+            text:Show()
+        else
+            text:Hide()
+        end
+    end
+end
+
 function LiteNamePlatesMixin:OnEvent(event, ...)
     if event == "ADDON_LOADED" then
         local name = ...
@@ -257,11 +286,23 @@ function LiteNamePlatesMixin:OnEvent(event, ...)
         end
     elseif event == "PLAYER_REGEN_DISABLED" then
         self:RegisterEvent("UNIT_SPELLCAST_START")
+        self:RegisterEvent("UNIT_SPELLCAST_STOP")
         self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START")
+        self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
+        if C_EventUtils.IsEventValid("UNIT_SPELLCAST_EMPOWER_START") then
+            self:RegisterEvent("UNIT_SPELLCAST_EMPOWER_START")
+            self:RegisterEvent("UNIT_SPELLCAST_EMPOWER_STOP")
+        end
         self:RegisterEvent("UNIT_SPELLCAST_INTERRUPTIBLE")
     elseif event == "PLAYER_REGEN_ENABLED" then
         self:UnregisterEvent("UNIT_SPELLCAST_START")
+        self:UnregisterEvent("UNIT_SPELLCAST_STOP")
         self:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_START")
+        self:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
+        if C_EventUtils.IsEventValid("UNIT_SPELLCAST_EMPOWER_START") then
+            self:UnregisterEvent("UNIT_SPELLCAST_EMPOWER_START")
+            self:UnregisterEvent("UNIT_SPELLCAST_EMPOWER_STOP")
+        end
         self:UnregisterEvent("UNIT_SPELLCAST_INTERRUPTIBLE")
     elseif event == "UNIT_SPELLCAST_START" then
         local unit = ...
@@ -269,15 +310,21 @@ function LiteNamePlatesMixin:OnEvent(event, ...)
         if notInterruptible == false then
             self:SaveUnitAsInterrupt(unit)
         end
+        self:UpdateCastingTarget(unit, true)
     elseif event == "UNIT_SPELLCAST_CHANNEL_START" then
         local unit = ...
         local notInterruptible = select(7, UnitChannelInfo(unit))
         if notInterruptible == false then
             self:SaveUnitAsInterrupt(unit)
         end
+        self:UpdateCastingTarget(unit, true)
     elseif event == "UNIT_SPELLCAST_INTERRUPTIBLE" then
         local unit = ...
         self:SaveUnitAsInterrupt(unit)
+    elseif event == "UNIT_SPELLCAST_STOP" or
+           event == "UNIT_SPELLCAST_CHANNEL_STOP" or
+           event == "UNIT_SPELLCAST_EMPOWER_STOP" then
+        local unit = ...
+        self:UpdateCastingTarget(unit, false)
     end
 end
-
