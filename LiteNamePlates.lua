@@ -145,10 +145,11 @@ end
 function LiteNamePlatesMixin:Initialize()
     self.db = LibStub("AceDB-3.0"):New("LiteNamePlatesDB", Defaults, true)
 
+    self.nameplates = {}
     self.targetTexts = {}
 
     local function UpdateHook(unitFrame)
-        if self:ShouldHandleUnit(unitFrame.unit) then
+        if self:ShouldColorUnit(unitFrame.unit) then
             self:UpdateUnitFrameColor(unitFrame)
         end
     end
@@ -156,6 +157,30 @@ function LiteNamePlatesMixin:Initialize()
     hooksecurefunc('CompactUnitFrame_UpdateName', UpdateHook)
     hooksecurefunc('CompactUnitFrame_UpdateHealthColor', UpdateHook)
     hooksecurefunc('CompactUnitFrame_UpdateHealthBorder', UpdateHook)
+
+    -- ApplyFrameOptions ends up doing a separate version of setting the
+    -- height outside the OnSizeChanged handler.
+    hooksecurefunc(NamePlateDriverFrame, 'ApplyFrameOptions',
+        function (_, nameplate)
+            local unit = nameplate.UnitFrame.unit
+            if unit and C_NamePlate.GetNamePlateForUnit(unit) then
+                self:StyleUnitFrameHeight(nameplate.UnitFrame)
+            end
+        end)
+    -- Every time OnNamePlateAdded -> AcquireUnitFrame is called the
+    -- OnSizeChanged script is replaced so we need to re-hook. Carefully
+    -- checking for forbidden nameplates with C_UnitFrame.
+    hooksecurefunc(NamePlateDriverFrame, 'OnNamePlateAdded',
+        function (_, unit)
+            local nameplate = C_NamePlate.GetNamePlateForUnit(unit)
+            if nameplate then
+                nameplate:HookScript('OnSizeChanged',
+                    function ()
+                        self:StyleUnitFrameHeight(nameplate.UnitFrame)
+                    end)
+                self:StyleUnitFrameTexture(nameplate.UnitFrame)
+            end
+        end)
 
     self:RegisterEvent("PLAYER_REGEN_DISABLED")
     self:RegisterEvent("PLAYER_REGEN_ENABLED")
@@ -169,7 +194,20 @@ function LiteNamePlatesMixin:Initialize()
     _G.SLASH_LiteNamePlates2 = "/lnp"
 end
 
-function LiteNamePlatesMixin:ShouldHandleUnit(unit, includeBoss)
+function LiteNamePlatesMixin:StyleUnitFrameHeight(unitFrame)
+    if unitFrame and unitFrame.unit and C_NamePlate.GetNamePlateForUnit(unitFrame.unit) then
+        if not NamePlateDriverFrame:IsUsingLargerNamePlateStyle() then
+            local h = 8 * GetCVarNumberOrDefault("NamePlateVerticalScale")
+            PixelUtil.SetHeight(unitFrame.HealthBarsContainer, h)
+        end
+    end
+end
+
+function LiteNamePlatesMixin:StyleUnitFrameTexture(unitFrame)
+    unitFrame.healthBar:SetStatusBarTexture("mixingpool-frame-fill-white")
+end
+
+function LiteNamePlatesMixin:ShouldColorUnit(unit, includeBoss)
     -- Forbidden nameplates don't work, but will still have their unitframes
     -- passed to the hook. Because you can't call any functions on them you
     -- can't tie them back to their nameplate to tell it's forbidden. I
@@ -212,20 +250,6 @@ function LiteNamePlatesMixin:UpdateUnitFrameColor(unitFrame)
     for _, rule in ipairs(self.db.global.rules) do
         if self:CheckRule(rule, unitFrame.unit) then
             if todo.healthBar and rule.colorHealthBar then
-                --[[
-                local ok, err = pcall(unitFrame.healthBar.SetStatusBarColor, unitFrame.healthBar, unpack(rule.color))
-                if not ok then
-                    error(err)
-                    self.db.global.errors = self.db.global.errors or {}
-                    table.insert(self.db.global.errors,
-                        {
-                            err = err,
-                            unit = unitFrame.unit,
-                            guid = UnitGUID(unitFrame.unit),
-                            rule = CopyTable(rule)
-                        })
-                end
-                ]]
                 unitFrame.healthBar:SetStatusBarColor(unpack(rule.color))
                 todo.healthBar = nil
             end
@@ -250,14 +274,17 @@ function LiteNamePlatesMixin:SaveUnitAsInterrupt(unit)
     end
 end
 
-function LiteNamePlatesMixin:GetTargetText(unit)
+function LiteNamePlatesMixin:GetTargetFontString(unit)
     if not self.targetTexts[unit] then
         local nameplate = C_NamePlate.GetNamePlateForUnit(unit)
         local castBar = nameplate.UnitFrame.castBar
         local text = self:CreateFontString()
         local fontFile, height, flags = castBar.Text:GetFont()
+        -- Not sure if SetParent will cause issues, only done so it
+        -- inherits the scale which is dynamic.
+        text:SetParent(nameplate)
         text:SetFont(fontFile, height, flags)
-        text:SetPoint("LEFT", castBar, "RIGHT", 4)
+        text:SetPoint("TOPRIGHT", castBar, "BOTTOMRIGHT", 4)
         text:Hide()
         self.targetTexts[unit] = text
     end
@@ -265,8 +292,8 @@ function LiteNamePlatesMixin:GetTargetText(unit)
 end
 
 function LiteNamePlatesMixin:UpdateCastingTarget(unit, isCasting)
-    if self:ShouldHandleUnit(unit, true) then
-        local text = self:GetTargetText(unit)
+    if self:ShouldColorUnit(unit, true) then
+        local text = self:GetTargetFontString(unit)
         if isCasting then
             local targetName = UnitName(unit..'-target')
             text:SetText(targetName)
@@ -277,6 +304,41 @@ function LiteNamePlatesMixin:UpdateCastingTarget(unit, isCasting)
     end
 end
 
+function LiteNamePlatesMixin:HideAllCastingTargets()
+    for _, text in pairs(self.targetTexts) do
+        text:Hide()
+    end
+end
+
+function LiteNamePlatesMixin:OnCombatStart()
+    self:RegisterEvent("UNIT_SPELLCAST_START")
+    self:RegisterEvent("UNIT_SPELLCAST_STOP")
+    self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START")
+    self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
+    if C_EventUtils.IsEventValid("UNIT_SPELLCAST_EMPOWER_START") then
+        self:RegisterEvent("UNIT_SPELLCAST_EMPOWER_START")
+        self:RegisterEvent("UNIT_SPELLCAST_EMPOWER_STOP")
+    end
+    self:RegisterEvent("UNIT_SPELLCAST_FAILED")
+    self:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED")
+    self:RegisterEvent("UNIT_SPELLCAST_INTERRUPTIBLE")
+end
+
+function LiteNamePlatesMixin:OnCombatStop()
+    self:UnregisterEvent("UNIT_SPELLCAST_START")
+    self:UnregisterEvent("UNIT_SPELLCAST_STOP")
+    self:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_START")
+    self:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
+    if C_EventUtils.IsEventValid("UNIT_SPELLCAST_EMPOWER_START") then
+        self:UnregisterEvent("UNIT_SPELLCAST_EMPOWER_START")
+        self:UnregisterEvent("UNIT_SPELLCAST_EMPOWER_STOP")
+    end
+    self:UnregisterEvent("UNIT_SPELLCAST_FAILED")
+    self:UnregisterEvent("UNIT_SPELLCAST_INTERRUPTED")
+    self:UnregisterEvent("UNIT_SPELLCAST_INTERRUPTIBLE")
+    self:HideAllCastingTargets()
+end
+
 function LiteNamePlatesMixin:OnEvent(event, ...)
     if event == "ADDON_LOADED" then
         local name = ...
@@ -285,25 +347,9 @@ function LiteNamePlatesMixin:OnEvent(event, ...)
             self:Initialize()
         end
     elseif event == "PLAYER_REGEN_DISABLED" then
-        self:RegisterEvent("UNIT_SPELLCAST_START")
-        self:RegisterEvent("UNIT_SPELLCAST_STOP")
-        self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START")
-        self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
-        if C_EventUtils.IsEventValid("UNIT_SPELLCAST_EMPOWER_START") then
-            self:RegisterEvent("UNIT_SPELLCAST_EMPOWER_START")
-            self:RegisterEvent("UNIT_SPELLCAST_EMPOWER_STOP")
-        end
-        self:RegisterEvent("UNIT_SPELLCAST_INTERRUPTIBLE")
+        self:OnCombatStart()
     elseif event == "PLAYER_REGEN_ENABLED" then
-        self:UnregisterEvent("UNIT_SPELLCAST_START")
-        self:UnregisterEvent("UNIT_SPELLCAST_STOP")
-        self:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_START")
-        self:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
-        if C_EventUtils.IsEventValid("UNIT_SPELLCAST_EMPOWER_START") then
-            self:UnregisterEvent("UNIT_SPELLCAST_EMPOWER_START")
-            self:UnregisterEvent("UNIT_SPELLCAST_EMPOWER_STOP")
-        end
-        self:UnregisterEvent("UNIT_SPELLCAST_INTERRUPTIBLE")
+        self:OnCombatStop()
     elseif event == "UNIT_SPELLCAST_START" then
         local unit = ...
         local notInterruptible = select(8, UnitCastingInfo(unit))
@@ -323,7 +369,9 @@ function LiteNamePlatesMixin:OnEvent(event, ...)
         self:SaveUnitAsInterrupt(unit)
     elseif event == "UNIT_SPELLCAST_STOP" or
            event == "UNIT_SPELLCAST_CHANNEL_STOP" or
-           event == "UNIT_SPELLCAST_EMPOWER_STOP" then
+           event == "UNIT_SPELLCAST_EMPOWER_STOP" or
+           event == "UNIT_SPELLCAST_FAILED" or
+           event == "UNIT_SPELLCAST_INTERRUPTED" then
         local unit = ...
         self:UpdateCastingTarget(unit, false)
     end
