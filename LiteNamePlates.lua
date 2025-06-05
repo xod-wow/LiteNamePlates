@@ -136,6 +136,48 @@ local Checks = {
 
 --[[------------------------------------------------------------------------]]--
 
+-- UnitName(unit .. "-target") isn't always available right away so this
+-- retries updates. From observation it's never doing more than a tick or two.
+
+local TargetTextUpdater = CreateFrame("FRAME")
+TargetTextUpdater.pendingTexts = {}
+
+function TargetTextUpdater:RescanPending()
+    for unit, fontString in pairs(self.pendingTexts) do
+        if fontString:IsShown() then
+            local targetName = UnitName(unit..'-target')
+            if targetName then
+                fontString:SetText(targetName)
+                self.pendingTexts[unit] = nil
+            end
+        else
+            self.pendingTexts[unit] = nil
+        end
+    end
+    return next(self.pendingTexts) == nil
+end
+
+function TargetTextUpdater:OnUpdate(elapsed)
+    self.totalElapsed = ( self.totalElapsed or 1 ) + elapsed
+    if self.totalElapsed > 0.05 then
+        local isDone = self:RescanPending()
+        if isDone then
+            self.totalElapsed = nil
+            self:SetScript('OnUpdate', nil)
+        else
+            self.totalElapsed = 0
+        end
+    end
+end
+
+function TargetTextUpdater:SetUnit(unit, fontString)
+    self.pendingTexts[unit] = fontString
+    self:SetScript('OnUpdate', self.OnUpdate)
+end
+
+
+--[[------------------------------------------------------------------------]]--
+
 LiteNamePlatesMixin = {}
 
 function LiteNamePlatesMixin:OnLoad()
@@ -145,7 +187,6 @@ end
 function LiteNamePlatesMixin:Initialize()
     self.db = LibStub("AceDB-3.0"):New("LiteNamePlatesDB", Defaults, true)
 
-    self.nameplates = {}
     self.targetTexts = {}
 
     local function UpdateHook(unitFrame)
@@ -212,9 +253,9 @@ function LiteNamePlatesMixin:ShouldColorUnit(unit, includeBoss)
     -- passed to the hook. Because you can't call any functions on them you
     -- can't tie them back to their nameplate to tell it's forbidden. I
     -- think this check works.
-    if C_NamePlate.GetNamePlateForUnit(unit) == nil then
+    if not unit then
         return false
-    elseif not unit then
+    elseif C_NamePlate.GetNamePlateForUnit(unit) == nil then
         return false
     elseif unit:sub(1,9) ~= 'nameplate' then
         return false
@@ -274,9 +315,8 @@ function LiteNamePlatesMixin:SaveUnitAsInterrupt(unit)
     end
 end
 
-function LiteNamePlatesMixin:GetTargetFontString(unit)
-    if not self.targetTexts[unit] then
-        local nameplate = C_NamePlate.GetNamePlateForUnit(unit)
+function LiteNamePlatesMixin:GetTargetFontString(nameplate)
+    if not self.targetTexts[nameplate] then
         local castBar = nameplate.UnitFrame.castBar
         local text = self:CreateFontString()
         local fontFile, height, flags = castBar.Text:GetFont()
@@ -286,20 +326,20 @@ function LiteNamePlatesMixin:GetTargetFontString(unit)
         text:SetFont(fontFile, height, flags)
         text:SetPoint("TOPRIGHT", castBar, "BOTTOMRIGHT", 4)
         text:Hide()
-        self.targetTexts[unit] = text
+        self.targetTexts[nameplate] = text
     end
-    return self.targetTexts[unit]
+    return self.targetTexts[nameplate]
 end
 
 function LiteNamePlatesMixin:UpdateCastingTarget(unit, isCasting)
-    if self:ShouldColorUnit(unit, true) then
-        local text = self:GetTargetFontString(unit)
+    local nameplate = C_NamePlate.GetNamePlateForUnit(unit)
+    if nameplate then
+        local fontString = self:GetTargetFontString(nameplate)
         if isCasting then
-            local targetName = UnitName(unit..'-target')
-            text:SetText(targetName)
-            text:Show()
+            TargetTextUpdater:SetUnit(unit, fontString)
+            fontString:Show()
         else
-            text:Hide()
+            fontString:Hide()
         end
     end
 end
