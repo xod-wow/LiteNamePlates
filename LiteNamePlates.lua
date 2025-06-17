@@ -206,6 +206,7 @@ function LiteNamePlatesMixin:Initialize()
             local unit = nameplate.UnitFrame.unit
             if unit and C_NamePlate.GetNamePlateForUnit(unit) then
                 self:StyleUnitFrameHeight(nameplate.UnitFrame)
+                self:StyleUnitFrameCastBar(nameplate.UnitFrame)
             end
         end)
     -- Every time OnNamePlateAdded -> AcquireUnitFrame is called the
@@ -218,6 +219,7 @@ function LiteNamePlatesMixin:Initialize()
                 nameplate:HookScript('OnSizeChanged',
                     function ()
                         self:StyleUnitFrameHeight(nameplate.UnitFrame)
+                        self:StyleUnitFrameCastBar(nameplate.UnitFrame)
                     end)
                 self:StyleUnitFrameTexture(nameplate.UnitFrame)
             end
@@ -242,6 +244,14 @@ function LiteNamePlatesMixin:StyleUnitFrameHeight(unitFrame)
             PixelUtil.SetHeight(unitFrame.HealthBarsContainer, h)
         end
     end
+end
+
+function LiteNamePlatesMixin:StyleUnitFrameCastBar(unitFrame)
+    -- Move the spell name text left instead of SetAllPoints
+    local fontFile, height, flags = unitFrame.castBar.Text:GetFont()
+    unitFrame.castBar.Text:ClearAllPoints()
+    unitFrame.castBar.Text:SetPoint("LEFT", unitFrame.castBar, "LEFT", 4, 0)
+    unitFrame.castBar.Text:SetFont(fontFile, 6, flags)
 end
 
 function LiteNamePlatesMixin:StyleUnitFrameTexture(unitFrame)
@@ -318,13 +328,14 @@ end
 function LiteNamePlatesMixin:GetTargetFontString(nameplate)
     if not self.targetTexts[nameplate] then
         local castBar = nameplate.UnitFrame.castBar
+        -- Spell bar is moved left in ApplyFrameOptions hook
+        -- Add spell target text on right
         local text = self:CreateFontString()
-        local fontFile, height, flags = castBar.Text:GetFont()
-        -- Not sure if SetParent will cause issues, only done so it
-        -- inherits the scale which is dynamic.
-        text:SetParent(nameplate)
-        text:SetFont(fontFile, height, flags)
-        text:SetPoint("TOPRIGHT", castBar, "BOTTOMRIGHT", 4)
+        -- Not sure if SetParent will cause issues. So far so good.
+        text:SetParent(castBar)
+        local fontFile, _, flags = castBar.Text:GetFont()
+        text:SetFont(fontFile, 6, flags)
+        text:SetPoint("RIGHT", castBar, "RIGHT", 0, 0)
         text:Hide()
         self.targetTexts[nameplate] = text
     end
