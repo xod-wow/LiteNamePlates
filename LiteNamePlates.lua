@@ -144,7 +144,7 @@ TargetTextUpdater.pendingTexts = {}
 
 function TargetTextUpdater:RescanPending()
     for unit, fontString in pairs(self.pendingTexts) do
-        if fontString:IsShown() then
+        if fontString:IsVisible() then
             local targetName = UnitName(unit..'-target')
             if targetName then
                 fontString:SetText(targetName)
@@ -342,13 +342,25 @@ function LiteNamePlatesMixin:GetTargetFontString(nameplate)
     return self.targetTexts[nameplate]
 end
 
+local function UnitIsTankingUnit(srcUnit, destUnit)
+    local srcGUID = UnitGUID(srcUnit)
+    if srcGUID then
+        srcUnit = UnitTokenFromGUID(srcGUID)
+        if srcUnit then
+            return UnitDetailedThreatSituation(srcUnit, destUnit) == true
+        end
+    end
+end
+
 function LiteNamePlatesMixin:UpdateCastingTarget(unit, isCasting)
     local nameplate = C_NamePlate.GetNamePlateForUnit(unit)
     if nameplate then
+        local targetUnit = unit.."-target"
+        local targetUnitName = UnitName(targetUnit)
         local fontString = self:GetTargetFontString(nameplate)
-        if isCasting then
-            TargetTextUpdater:SetUnit(unit, fontString)
+        if isCasting and targetUnitName and not UnitIsTankingUnit(targetUnit, unit) then
             fontString:Show()
+            fontString:SetText(targetUnitName)
         else
             fontString:Hide()
         end
