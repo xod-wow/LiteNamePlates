@@ -35,13 +35,6 @@ local options = {
             args = { },
             plugins = { },
         },
-        GroupsGroup = {
-            type = "group",
-            name = "NPC Groups",
-            order = order(),
-            args = { },
-            plugins = { },
-        },
     },
 }
 
@@ -118,95 +111,6 @@ local function GenerateOptions()
     end
 
     options.args.RulesGroup.plugins.rules = rulesTable
-
-    local groupsTable = {}
-    local groupNames = GetKeysArray(db.global.groups)
-    table.sort(groupNames)
-    for _, groupName in ipairs(groupNames) do
-        groupsTable[groupName] = {
-            type = "group",
-            name = groupName,
-            order = order(),
-            args = {
-                ["groupAdd"] = {
-                    type = "group",
-                    inline = true,
-                    name = "",
-                    width = 'full',
-                    order = 1,
-                    args = {
-                        ["npcid"] = {
-                            order = 2,
-                            type = "input",
-                            name = "",
-                            pattern = "^%d+$",
-                            width = 0.4,
-                            get = addState.Get,
-                            set = addState.Set,
-                        },
-                        ["npcname"] = {
-                            order = 3,
-                            type = "input",
-                            name = "",
-                            width = 1.5,
-                            get = addState.Get,
-                            set = addState.Set,
-                        },
-                        ["npcadd"] = {
-                            order = 4,
-                            type = "execute",
-                            name = ADD,
-                            func =
-                                function (info)
-                                    info[#info] = 'npcid'
-                                    local npcID = tonumber(addState.GetAndRemove(info))
-                                    info[#info] = 'npcname'
-                                    local npcName = addState.GetAndRemove(info)
-                                    db.global.groups[groupName][npcID] = npcName
-                                end,
-                            width = 0.5,
-                        },
-                    },
-                },
-            },
-        }
-
-        local npcIDs = GetKeysArraySortedByValue(db.global.groups[groupName])
-        for i, id in ipairs(npcIDs) do
-            -- fake groups force lines in list
-            groupsTable[groupName].args["group"..i] = {
-                type = "group",
-                inline = true,
-                name = "",
-                width = 'full',
-                order = i*10+1,
-                args = {
-                    ["npcid"..i] = {
-                        order = i*10+2,
-                        type = "description",
-                        name = tostring(id),
-                        width = 0.4,
-                    },
-                    ["npcname"..i] = {
-                        order = i*10+3,
-                        type = "description",
-                        name = db.global.groups[groupName][id],
-                        width = 1.5,
-                    },
-                    ["npcdelete"..i] = {
-                        order = i*10+4,
-                        type = "execute",
-                        name = DELETE,
-                        desc = db.global.groups[groupName][id],
-                        func = function () db.global.groups[groupName][id] = nil end,
-                        width = 0.5,
-                    },
-                }
-            }
-        end
-    end
-
-    options.args.GroupsGroup.plugins.groups = groupsTable
 
     return options
 end

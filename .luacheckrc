@@ -6,6 +6,10 @@ exclude_files = {
 -- https://luacheck.readthedocs.io/en/stable/warnings.html
 
 ignore = {
+    "211/_.*",      -- Unused local variable
+    "212/_.*",      -- Unused argument
+    "212/self",     -- Unused argument
+    "213/_.*",      -- Unused loop variable
 --[[
     "11./BINDING_.*", -- Setting an undefined (Keybinding) global variable
     "11./MOUNT_JOURNAL_FILTER_.*",
@@ -25,32 +29,27 @@ globals = {
 }
 
 read_globals = {
-    "ADD",
     "COLOR",
     "C_NamePlate",
     "C_SpecializationInfo",
-    "DELETE",
-    "GetKeysArray",
-    "GetKeysArraySortedByValue",
+    "Enum",
+    "GetCVarNumberOrDefault",
     "GetSpecialization",
     "GetSpecializationRole",
     "IsInGroup",
     "LibStub",
+    "NamePlateDriverFrame",
+    "PixelUtil",
     "Settings",
-    "UnitCastingInfo",
-    "UnitChannelInfo",
-    "UnitDetailedThreatSituation",
-    "UnitGUID",
     "UnitGroupRolesAssigned",
-    "UnitHasMana",
     "UnitIsBossMob",
-    "UnitIsFriend",
-    "UnitIsOtherPlayersPet",
     "UnitIsPlayer",
     "UnitIsTapDenied",
-    "UnitName",
+    "UnitPowerType",
     "UnitReaction",
+    "UnitThreatSituation",
     "ValueToBoolean",
+    "WOW_PROJECT_ID",
     "hooksecurefunc",
     "strsplit",
 }
