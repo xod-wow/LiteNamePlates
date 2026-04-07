@@ -167,6 +167,8 @@ function LiteNamePlatesMixin:ShouldColorUnit(unit, includeBoss)
     -- think this check works.
     if not unit then
         return false
+    elseif not UnitCanAttack('player', unit) then
+        return false
     elseif unit:sub(1, 5) == 'arena' then
         -- C_NamePlate.GetNamePlateForUnit errors on arena in retail
         return false
