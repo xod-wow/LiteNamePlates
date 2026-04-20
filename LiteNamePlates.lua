@@ -78,13 +78,14 @@ end
 local Checks = {
     ["hasmana"] =
         function (unit)
+            -- return UnitClassBase(unit) == "PALADIN"
             return UnitPowerType(unit) == Enum.PowerType.Mana
         end,
     ["lostthreat"] =
         function (unit)
             if IsPlayerEffectivelyTank() and IsInGroup() then
                 local threatStatus = UnitThreatSituation("player", unit)
-                return threatStatus == 0 or threatStatus == 2 or threatStatus == 3
+                return threatStatus and threatStatus ~= 3
             end
         end,
 }
